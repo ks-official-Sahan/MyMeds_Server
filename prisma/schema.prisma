@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  firebaseUid  String   @unique
+  email        String   @unique
+  password     String
+  name         String?
+  mobile       String?
+  address      String?
+  city         String?
+  country      String?
+  profileImage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  title        String
+  description  String?
+  image        String?
+  categoryName String
+  dosage       String
+  price        String
+  quantity     Int
+  manufacturer String?
+  expiryDate   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Category {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  image      String?  // URL to an image; backend won’t store an Android icon resource.
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+type CartItem {
+  productId String @db.ObjectId
+  quantity  Int
+}
+
+model Order {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  orderId     String     @unique
+  userId      String
+  items       OrderItem[]
+  totalPrice  Float
+  delivery    Float
+  status      String
+  timestamp   DateTime
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+type OrderItem {
+  productId String @db.ObjectId
+  quantity  Int
+}
+
