@@ -87,6 +87,7 @@ export class AuthController {
       const user = await this.prisma.user.findUnique({
         where: { firebaseUid },
       });
+      //console.log(user);
       return user;
     } catch (error) {
       throw error;
