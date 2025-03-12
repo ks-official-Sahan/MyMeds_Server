@@ -1,86 +1,130 @@
+// File: src/cart/cart.service.ts
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
 import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+  AddProductDto,
+  UpdateProductDto,
+  RemoveProductDto,
+} from './dto/cart.dto';
 
 @Injectable()
 export class CartService {
   constructor(private prisma: PrismaService) {}
 
+  // Get the cart for a given user.
   async getCart(userId: string) {
-    let cart = await this.prisma.cart.findUnique({ where: { userId } });
-    if (!cart) {
-      cart = await this.prisma.cart.create({ data: { userId, items: [] } });
-    }
-    return cart;
-  }
-
-  async addProduct(userId: string, productId: string, quantity: number) {
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
-    });
-    if (!product) throw new NotFoundException('Product not found');
-    if (quantity > product.quantity)
-      throw new BadRequestException('Insufficient stock');
-
-    let cart = await this.prisma.cart.findUnique({ where: { userId } });
-    if (!cart) {
-      cart = await this.prisma.cart.create({ data: { userId, items: [] } });
-    }
-    const index = cart.items.findIndex((item) => item.productId === productId);
-    if (index > -1) {
-      const newQuantity = cart.items[index].quantity + quantity;
-      if (newQuantity > product.quantity)
-        throw new BadRequestException('Insufficient stock');
-      cart.items[index].quantity = newQuantity;
-    } else {
-      cart.items.push({ productId, quantity });
-    }
-    return this.prisma.cart.update({
+    const cart = await this.prisma.cart.findUnique({
       where: { userId },
-      data: { items: cart.items },
     });
+    // If no cart exists, return an empty cart object.
+    return cart || { id: null, userId, items: [] };
   }
 
-  async updateProduct(userId: string, productId: string, quantity: number) {
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
+  // Add a product to the cart.
+  async addProduct(userId: string, addProductDto: AddProductDto) {
+    const { productId, quantity } = addProductDto;
+    let cart = await this.prisma.cart.findUnique({
+      where: { userId },
     });
-    if (!product) throw new NotFoundException('Product not found');
-    if (quantity > product.quantity)
-      throw new BadRequestException('Insufficient stock');
 
-    let cart = await this.prisma.cart.findUnique({ where: { userId } });
-    if (!cart) throw new NotFoundException('Cart not found');
-    const index = cart.items.findIndex((item) => item.productId === productId);
-    if (index === -1) throw new NotFoundException('Product not in cart');
+    if (!cart) {
+      // Create a new cart for the user.
+      cart = await this.prisma.cart.create({
+        data: {
+          userId,
+          items: [{ productId, quantity }],
+        },
+        include: { items: true },
+      });
+      return cart;
+    }
+
+    // Check if product already exists in the cart.
+    const existingItem = cart.items.find(
+      (item) => item.productId === productId,
+    );
+    if (existingItem) {
+      // Update quantity.
+      const updatedQuantity = existingItem.quantity + quantity;
+      await this.prisma.cart.update({
+        where: { userId },
+        data: {
+          items: {
+            updateMany: {
+              where: { productId },
+              data: { quantity: updatedQuantity },
+            },
+          },
+        },
+      });
+    } else {
+      // Add new item.
+      await this.prisma.cart.update({
+        where: { userId },
+        data: {
+          items: {
+            push: { productId, quantity },
+          },
+        },
+      });
+    }
+
+    return this.getCart(userId);
+  }
+
+  // Update the quantity of a product in the cart.
+  async updateProduct(userId: string, updateProductDto: UpdateProductDto) {
+    const { productId, quantity } = updateProductDto;
+    const cart = await this.prisma.cart.findUnique({
+      where: { userId },
+    });
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+
+    // If quantity is 0, remove the product.
     if (quantity === 0) {
-      cart.items.splice(index, 1);
-    } else {
-      cart.items[index].quantity = quantity;
+      return this.removeProduct(userId, { productId });
     }
-    return this.prisma.cart.update({
+
+    // Otherwise, update the quantity.
+    // Here, we rebuild the items array.
+    const newItems = cart.items.map((item) => {
+      if (item.productId === productId) {
+        return { ...item, quantity };
+      }
+      return item;
+    });
+
+    return await this.prisma.cart.update({
       where: { userId },
-      data: { items: cart.items },
+      data: { items: newItems },
     });
   }
 
-  async removeProduct(userId: string, productId: string) {
-    let cart = await this.prisma.cart.findUnique({ where: { userId } });
-    if (!cart) throw new NotFoundException('Cart not found');
-    cart.items = cart.items.filter((item) => item.productId !== productId);
-    return this.prisma.cart.update({
+  // Remove a product from the cart.
+  async removeProduct(userId: string, removeProductDto: RemoveProductDto) {
+    const { productId } = removeProductDto;
+    const cart = await this.prisma.cart.findUnique({
       where: { userId },
-      data: { items: cart.items },
+    });
+    if (!cart) {
+      throw new NotFoundException('Cart not found');
+    }
+    const newItems = cart.items.filter((item) => item.productId !== productId);
+    return await this.prisma.cart.update({
+      where: { userId },
+      data: { items: newItems },
     });
   }
 
+  // Clear the cart.
   async clearCart(userId: string) {
-    let cart = await this.prisma.cart.findUnique({ where: { userId } });
-    if (!cart) throw new NotFoundException('Cart not found');
-    return this.prisma.cart.update({
+    // Option 1: delete the cart entirely.
+    // return await this.prisma.cart.delete({ where: { userId } });
+
+    // Option 2: update cart items to an empty array.
+    return await this.prisma.cart.update({
       where: { userId },
       data: { items: [] },
     });

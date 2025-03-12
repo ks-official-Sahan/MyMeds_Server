@@ -18,49 +18,11 @@ export class AuthController {
     private readonly prisma: PrismaService,
   ) {}
 
-  @Post('signup')
-  async signup(@Body() body: { email: string; password: string }) {
-    const { email, password } = body;
-    try {
-      // Create user in Firebase
-      const userRecord = await this.firebaseService.createUser(email, password);
-
-      // Create user record in MongoDB (mcommerce) using Firebase UID
-      const user = await this.prisma.user.create({
-        data: {
-          firebaseUid: userRecord.uid,
-          email,
-          password: 'firebase', // Placeholder, as Firebase handles auth.
-        },
-      });
-      return {
-        message: 'User created successfully',
-        uid: userRecord.uid,
-        user,
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // (Optional) Endpoint to generate a custom token – useful if you need to exchange a uid for a token.
-  @Post('custom-token')
-  async getCustomToken(@Body() body: { uid: string }) {
-    try {
-      const token = await this.firebaseService.generateCustomToken(body.uid);
-      return { token };
-    } catch (error) {
-      throw error;
-    }
-  }
-
   @UseGuards(FirebaseAuthGuard)
-  @Post('sync') // Sync endpoint: Ensures that an authenticated Firebase user is saved in the backend.
+  @Post('sync') // Sync endpoint: Authenticated Firebase user is saved in the backend.
   async syncUser(@Request() req) {
-    // req.user is populated by FirebaseAuthGuard; it typically contains uid and email
     const { uid, email } = req.user;
     try {
-      // Check if a user record with this Firebase UID already exists.
       let user = await this.prisma.user.findUnique({
         where: { firebaseUid: uid },
       });
@@ -69,7 +31,7 @@ export class AuthController {
           data: {
             firebaseUid: uid,
             email,
-            password: 'firebase', // Placeholder since Firebase manages authentication.
+            password: 'firebase-auth', // Placeholder since Firebase manages authentication.
           },
         });
       }
@@ -94,7 +56,6 @@ export class AuthController {
     }
   }
 
-  // Update profile endpoint (existing)
   @UseGuards(FirebaseAuthGuard)
   @Put('profile')
   async updateProfile(
@@ -107,6 +68,7 @@ export class AuthController {
       city?: string;
       country?: string;
       profileImage?: string;
+      location?: string;
     },
   ) {
     const firebaseUid = req.user.uid;

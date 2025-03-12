@@ -1,4 +1,3 @@
-// order/order.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -9,22 +8,49 @@ export class OrderService {
   constructor(private prisma: PrismaService) {}
 
   async createOrder(userId: string, dto: CreateOrderDto) {
-    let oid = dto.orderId ? dto.orderId : dto.id;
-    return this.prisma.order.create({
+    const oid = dto.orderId || dto.id;
+    
+    const order = await this.prisma.order.create({
       data: {
         orderId: oid,
         userId,
-        items: dto.items,
+        orderItems: (dto.orderItems || []).map((item) => ({
+          productId: item.product.id, // extract id from the nested product object
+          quantity: item.quantity,
+        })),
         totalPrice: dto.totalPrice,
         delivery: dto.delivery,
         status: dto.status,
         timestamp: dto.timestamp,
       },
     });
+
+    return order;
   }
 
   async getOrders(userId: string) {
-    return this.prisma.order.findMany({ where: { userId } });
+    const orders = await this.prisma.order.findMany({ where: { userId } });
+
+    // Collect all product IDs from order items
+    const productIds = orders.flatMap((order) =>
+      order.orderItems.map((item) => item.productId),
+    );
+
+    // Retrieve product details in one query
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+    });
+
+    // Map product details into each order's orderItems
+    const ordersWithProductInfo = orders.map((order) => ({
+      ...order,
+      orderItems: order.orderItems.map((item) => ({
+        ...item,
+        product: products.find((prod) => prod.id === item.productId),
+      })),
+    }));
+
+    return ordersWithProductInfo;
   }
 
   async updateOrderStatus(userId: string, dto: UpdateOrderStatusDto) {

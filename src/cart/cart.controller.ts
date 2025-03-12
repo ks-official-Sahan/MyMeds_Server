@@ -1,41 +1,65 @@
-import { Controller, Get, Post, Put, Delete, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { CartService } from './cart.service';
-import { AddCartItemDto } from './dto/add-cart-item.dto';
-import { UpdateCartItemDto } from './dto/update-cart-item.dto';
-import { RemoveCartItemDto } from './dto/remove-cart-item.dto';
-import { FirebaseAuthGuard } from '../firebase/firebase-auth.guard';
+import {
+  AddProductDto,
+  UpdateProductDto,
+  RemoveProductDto,
+} from './dto/cart.dto';
+import { FirebaseAuthGuard } from 'src/firebase/firebase-auth.guard';
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    uid: string;
+  };
+}
 
 @Controller('cart')
 @UseGuards(FirebaseAuthGuard)
 export class CartController {
-  constructor(private cartService: CartService) {}
+  constructor(private readonly cartService: CartService) {}
 
   @Get()
-  async getCart(@Req() req) {
+  async getCart(@Req() req: AuthenticatedRequest) {
     const userId = req.user.uid;
     return await this.cartService.getCart(userId);
   }
 
   @Post('add')
-  async addProduct(@Req() req, @Body() dto: AddCartItemDto) {
+  async addProduct(@Req() req: AuthenticatedRequest, @Body() addProductDto: AddProductDto) {
     const userId = req.user.uid;
-    return await this.cartService.addProduct(userId, dto.productId, dto.quantity);
+    return await this.cartService.addProduct(userId, addProductDto);
   }
 
   @Put('update')
-  async updateProduct(@Req() req, @Body() dto: UpdateCartItemDto) {
+  async updateProduct(
+    @Req() req: AuthenticatedRequest,
+    @Body() updateProductDto: UpdateProductDto,
+  ) {
     const userId = req.user.uid;
-    return await this.cartService.updateProduct(userId, dto.productId, dto.quantity);
+    return await this.cartService.updateProduct(userId, updateProductDto);
   }
 
   @Delete('remove')
-  async removeProduct(@Req() req, @Body() dto: RemoveCartItemDto) {
+  async removeProduct(
+    @Req() req: AuthenticatedRequest,
+    @Body() removeProductDto: RemoveProductDto,
+  ) {
     const userId = req.user.uid;
-    return await this.cartService.removeProduct(userId, dto.productId);
+    return await this.cartService.removeProduct(userId, removeProductDto);
   }
 
   @Delete('clear')
-  async clearCart(@Req() req) {
+  async clearCart(@Req() req: AuthenticatedRequest) {
     const userId = req.user.uid;
     return await this.cartService.clearCart(userId);
   }
